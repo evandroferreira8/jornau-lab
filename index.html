@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Protótipo do Jornau Lab — plataforma de produções multimídia do Laboratório de Audiovisual." />
-  <title>Jornau Lab — Protótipo V3</title>
+  <title>Jornau Lab — Protótipo V6</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -520,6 +520,118 @@ html[data-theme="light"] .card-image { border-color: rgba(18,23,43,.08); }
   .brand-logo { width: 36px; height: 34px; }
   .icon-button, .menu-button { width: 38px; height: 38px; }
 }
+
+/* V4 — comportamento do menu mobile */
+@media (max-width: 780px) {
+  .main-nav {
+    max-height: calc(100svh - 84px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+
+
+/* ===============================
+   JORNAU LAB — V6 CAROUSEL CUES
+   Indícios visuais de conteúdo horizontal
+   =============================== */
+.rail-wrap {
+  --rail-edge: var(--bg);
+  padding-bottom: 4px;
+}
+
+/* leve fade na borda direita: sugere continuidade sem pesar */
+.rail-wrap::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  top: 0;
+  right: 0;
+  width: 42px;
+  height: calc(100% - 28px);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--rail-edge) 88%, transparent));
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.rail-wrap.is-scrollable:not(.at-end)::after { opacity: .82; }
+
+/* setas deixam de depender apenas do hover */
+.rail-wrap.is-scrollable .rail-arrow {
+  opacity: .9;
+  display: grid;
+  place-items: center;
+}
+.rail-wrap.at-start .rail-arrow.prev,
+.rail-wrap.at-end .rail-arrow.next {
+  opacity: 0;
+  pointer-events: none;
+}
+.rail-arrow {
+  transition: opacity .2s ease, transform .2s ease, background .2s ease;
+}
+.rail-arrow:hover {
+  background: #1a2239;
+}
+
+/* “trenzinhos” de posição abaixo de cada faixa */
+.rail-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 12px;
+  margin-top: 2px;
+}
+.rail-progress[hidden] { display: none; }
+.rail-progress span {
+  display: block;
+  width: 18px;
+  height: 3px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  transition: width .18s ease, background .18s ease, opacity .18s ease;
+  opacity: .75;
+}
+.rail-progress span.active {
+  width: 30px;
+  background: var(--editorial);
+  opacity: 1;
+}
+
+@media (max-width: 780px) {
+  /* no touch, a próxima peça aparece parcialmente e a seta reforça o gesto */
+  .rail {
+    grid-auto-columns: 82%;
+    padding-right: 42px;
+    scroll-snap-type: x mandatory;
+  }
+  .rail-arrow {
+    top: 42%;
+    width: 36px;
+    height: 52px;
+    border-radius: 999px;
+    font-size: 1.45rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,.22);
+  }
+  .rail-arrow.prev { left: -4px; border-radius: 999px; }
+  .rail-arrow.next { right: -4px; border-radius: 999px; }
+  .rail-wrap::after {
+    width: 34px;
+    height: calc(100% - 24px);
+  }
+  .rail-progress {
+    justify-content: flex-start;
+    margin-top: 1px;
+  }
+}
+
+@media (max-width: 520px) {
+  .rail { grid-auto-columns: 84%; }
+  .rail-progress span { width: 15px; }
+  .rail-progress span.active { width: 25px; }
+}
+
 </style>
 </head>
 <body>
@@ -909,8 +1021,41 @@ renderRail(rails.fotos, PRODUCOES.filter(p => p.formato === 'Fotojornalismo'));
 
 $$('.rail-wrap').forEach(wrap => {
   const rail = $('.rail', wrap);
-  $('.prev', wrap).addEventListener('click', () => rail.scrollBy({ left: -rail.clientWidth * .8, behavior: 'smooth' }));
-  $('.next', wrap).addEventListener('click', () => rail.scrollBy({ left: rail.clientWidth * .8, behavior: 'smooth' }));
+  const prev = $('.prev', wrap);
+  const next = $('.next', wrap);
+
+  // Indicador de posição: uma pequena barra por item da faixa.
+  const progress = document.createElement('div');
+  progress.className = 'rail-progress';
+  progress.setAttribute('aria-hidden', 'true');
+  wrap.insertAdjacentElement('afterend', progress);
+
+  const getCards = () => $$('.media-card', rail);
+
+  function updateRailCue() {
+    const cards = getCards();
+    const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    const isScrollable = maxScroll > 4;
+    wrap.classList.toggle('is-scrollable', isScrollable);
+    wrap.classList.toggle('at-start', rail.scrollLeft <= 5);
+    wrap.classList.toggle('at-end', rail.scrollLeft >= maxScroll - 5);
+    progress.hidden = !isScrollable || cards.length < 2;
+
+    if (!progress.hidden) {
+      if (progress.children.length !== cards.length) {
+        progress.innerHTML = cards.map(() => '<span></span>').join('');
+      }
+      const step = cards.length > 1 ? maxScroll / (cards.length - 1) : 0;
+      const active = step > 0 ? Math.max(0, Math.min(cards.length - 1, Math.round(rail.scrollLeft / step))) : 0;
+      $$('.rail-progress span', progress).forEach((bar, i) => bar.classList.toggle('active', i === active));
+    }
+  }
+
+  prev.addEventListener('click', () => rail.scrollBy({ left: -rail.clientWidth * .82, behavior: 'smooth' }));
+  next.addEventListener('click', () => rail.scrollBy({ left: rail.clientWidth * .82, behavior: 'smooth' }));
+  rail.addEventListener('scroll', updateRailCue, { passive: true });
+  window.addEventListener('resize', updateRailCue, { passive: true });
+  requestAnimationFrame(updateRailCue);
 });
 
 // Hero rotativo
@@ -1055,12 +1200,53 @@ themeButton.addEventListener('click', () => {
 // Menu mobile e cabeçalho
 const menuButton = $('#menuButton');
 const nav = $('.main-nav');
-menuButton.addEventListener('click', () => {
+
+function closeMobileMenu() {
+  nav.classList.remove('open');
+  menuButton.setAttribute('aria-expanded', 'false');
+}
+
+menuButton.addEventListener('click', (event) => {
+  event.stopPropagation();
   const open = nav.classList.toggle('open');
   menuButton.setAttribute('aria-expanded', String(open));
 });
-$$('.main-nav a').forEach(link => link.addEventListener('click', () => { nav.classList.remove('open'); menuButton.setAttribute('aria-expanded','false'); }));
-window.addEventListener('scroll', () => $('.topbar').classList.toggle('scrolled', window.scrollY > 20));
+
+$$('.main-nav a').forEach(link => link.addEventListener('click', closeMobileMenu));
+
+// No celular, qualquer gesto/rolagem fecha o painel de navegação.
+// O listener em document (capture) também detecta rolagens em contêineres internos,
+// como prévias incorporadas, onde o scroll nem sempre acontece no window.
+function handlePageScroll() {
+  $('.topbar').classList.toggle('scrolled', window.scrollY > 20);
+  if (window.innerWidth <= 780 && nav.classList.contains('open')) closeMobileMenu();
+}
+
+window.addEventListener('scroll', handlePageScroll, { passive: true });
+document.addEventListener('scroll', handlePageScroll, { passive: true, capture: true });
+
+// Em alguns navegadores/previews, a rolagem visual pode acontecer antes do evento scroll.
+// Fechamos o menu assim que o usuário inicia um gesto de rolagem.
+document.addEventListener('touchmove', () => {
+  if (window.innerWidth <= 780 && nav.classList.contains('open')) closeMobileMenu();
+}, { passive: true });
+document.addEventListener('wheel', () => {
+  if (window.innerWidth <= 780 && nav.classList.contains('open')) closeMobileMenu();
+}, { passive: true });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('scroll', handlePageScroll, { passive: true });
+}
+
+// Também fecha ao tocar fora do menu e ao mudar para uma tela maior.
+document.addEventListener('click', (event) => {
+  if (window.innerWidth <= 780 && nav.classList.contains('open') && !nav.contains(event.target) && !menuButton.contains(event.target)) {
+    closeMobileMenu();
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 780) closeMobileMenu();
+});
 
   </script>
 </body>
